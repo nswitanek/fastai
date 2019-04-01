@@ -4,7 +4,7 @@ from .torch_core import *
 __all__ = ['AdaptiveConcatPool2d', 'BCEWithLogitsFlat', 'BCEFlat', 'MSELossFlat', 'CrossEntropyFlat', 'Debugger',
            'Flatten', 'Lambda', 'PoolFlatten', 'View', 'ResizeBatch', 'bn_drop_lin', 'conv2d', 'conv2d_trans', 'conv_layer',
            'embedding', 'simple_cnn', 'NormType', 'relu', 'batchnorm_2d', 'trunc_normal_', 'PixelShuffle_ICNR', 'icnr',
-           'NoopLoss', 'WassersteinLoss', 'SelfAttention', 'SequentialEx', 'MergeLayer', 'res_block', 'sigmoid_range',
+           'NoopLoss', 'WassersteinLoss', 'SelfAttention', 'SequentialEx', 'MergeLayer', 'res_block', 'tabular_res_block', 'sigmoid_range',
            'SigmoidRange', 'PartialLayer', 'FlattenedLoss', 'BatchNorm1dFlat', 'LabelSmoothingCrossEntropy']
 
 class Lambda(nn.Module):
@@ -157,6 +157,20 @@ def res_block(nf, dense:bool=False, norm_type:Optional[NormType]=NormType.Batch,
     return SequentialEx(conv_layer(nf, nf_inner, norm_type=norm_type, **conv_kwargs),
                       conv_layer(nf_inner, nf, norm_type=norm2, **conv_kwargs),
                       MergeLayer(dense))
+
+def tabular_res_block(ni:int, dense:bool=False, bottle:bool=False, bn:bool=True, p:float=0.):
+    "Resnet block for tabular ResNet model."
+    layers = []
+    if bottle:
+        layers += bn_drop_lin(n_in=ni, n_out=ni//2, bn=bn, p=p, actn=nn.ReLU(inplace=True))
+        layers += bn_drop_lin(n_in=ni//2, n_out=ni//2, bn=bn, p=p, actn=nn.ReLU(inplace=True))
+        layers += bn_drop_lin(n_in=ni//2, n_out=ni, bn=bn, p=p, actn=None)
+    else:
+        layers += bn_drop_lin(n_in=ni, n_out=ni, bn=bn, p=p, actn=nn.ReLU(inplace=True))
+        layers += bn_drop_lin(n_in=ni, n_out=ni, bn=bn, p=p, actn=None)
+    layers.append(MergeLayer(dense))
+    layers.append(nn.ReLU(inplace=True))
+    return SequentialEx(*layers)
 
 def sigmoid_range(x, low, high):
     "Sigmoid function with range `(low, high)`"
