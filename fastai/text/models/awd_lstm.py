@@ -87,11 +87,12 @@ class AWD_LSTM(nn.Module):
         self.encoder_dp = EmbeddingDropout(self.encoder, embed_p)
         if self.qrnn:
             #Using QRNN requires an installation of cuda
-            from .qrnn import QRNNLayer
-            self.rnns = [QRNNLayer(emb_sz if l == 0 else n_hid, n_hid if l != n_layers - 1 else emb_sz,
-                                   save_prev_x=True, zoneout=0, window=2 if l == 0 else 1, output_gate=True,
-                                   use_cuda=torch.cuda.is_available()) for l in range(n_layers)]
-            for rnn in self.rnns: rnn.linear = WeightDropout(rnn.linear, weight_p, layer_names=['weight'])
+            from .qrnn import QRNN
+            self.rnns = [QRNN(emb_sz if l == 0 else n_hid, n_hid if l != n_layers - 1 else emb_sz, 1,
+                              save_prev_x=True, zoneout=0, window=2 if l == 0 else 1, output_gate=True) 
+                         for l in range(n_layers)]
+            for rnn in self.rnns: 
+                rnn.layers[0].linear = WeightDropout(rnn.layers[0].linear, weight_p, layer_names=['weight'])
         else:
             self.rnns = [nn.LSTM(emb_sz if l == 0 else n_hid, (n_hid if l != n_layers - 1 else emb_sz)//self.n_dir, 1,
                                  batch_first=True, bidirectional=bidir) for l in range(n_layers)]
@@ -101,7 +102,7 @@ class AWD_LSTM(nn.Module):
         self.input_dp = RNNDropout(input_p)
         self.hidden_dps = nn.ModuleList([RNNDropout(hidden_p) for l in range(n_layers)])
 
-    def forward(self, input:Tensor, from_embeddings:bool=False, detach:bool=True)->Tuple[Tensor,Tensor]:
+    def forward(self, input:Tensor, from_embeddings:bool=False)->Tuple[Tensor,Tensor]:
         if from_embeddings: bs,sl,es = input.size()
         else: bs,sl = input.size()
         if bs!=self.bs:
@@ -115,7 +116,7 @@ class AWD_LSTM(nn.Module):
             raw_outputs.append(raw_output)
             if l != self.n_layers - 1: raw_output = hid_dp(raw_output)
             outputs.append(raw_output)
-        self.hidden = to_detach(new_hidden, cpu=False) if detach else new_hidden
+        self.hidden = to_detach(new_hidden, cpu=False)
         return raw_outputs, outputs
 
     def _one_hidden(self, l:int)->Tensor:

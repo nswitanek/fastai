@@ -82,7 +82,7 @@ def create_cnn_model(base_arch:Callable, nc:int, cut:Union[int,Callable]=None, p
     "Create custom convnet architecture"
     body = create_body(base_arch, pretrained, cut)
     if custom_head is None:
-        nf = num_features_model(nn.Sequential(*body.children())) * 2
+        nf = num_features_model(nn.Sequential(*body.children())) * (2 if concat_pool else 1)
         head = create_head(nf, nc, lin_ftrs, ps=ps, concat_pool=concat_pool, bn_final=bn_final)
     else: head = custom_head
     return nn.Sequential(body, head)
@@ -129,7 +129,7 @@ def _cl_int_from_learner(cls, learn:Learner, ds_type:DatasetType=DatasetType.Val
 
 def _cl_int_plot_top_losses(self, k, largest=True, figsize=(12,12), heatmap:bool=True, heatmap_thresh:int=16,
                             return_fig:bool=None)->Optional[plt.Figure]:
-    "Show images in `top_losses` along with their prediction, actual, loss, and probability of predicted class."
+    "Show images in `top_losses` along with their prediction, actual, loss, and probability of actual class."
     tl_val,tl_idx = self.top_losses(k, largest)
     classes = self.data.classes
     cols = math.ceil(math.sqrt(k))

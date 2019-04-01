@@ -99,6 +99,9 @@ class ItemList():
 
     def add(self, items:'ItemList'):
         self.items = np.concatenate([self.items, items.items], 0)
+        if self.inner_df is not None and items.inner_df is not None:
+            self.inner_df = pd.concat([self.inner_df, items.inner_df])
+        else: self.inner_df = self.inner_df or items.inner_df
         return self
 
     def __getitem__(self,idxs:int)->Any:
@@ -152,8 +155,8 @@ class ItemList():
         "Only keep filenames in `include` folder or reject the ones in `exclude`."
         include,exclude = listify(include),listify(exclude)
         def _inner(o):
-            if isintance(o, Path): n = o.relative_to(self.path).parts[0]
-            else: o.split(os.path.sep)[len(str(self.path).split(os.path.sep))]
+            if isinstance(o, Path): n = o.relative_to(self.path).parts[0]
+            else: n = o.split(os.path.sep)[len(str(self.path).split(os.path.sep))]
             if include and not n in include: return False
             if exclude and     n in exclude: return False
             return True
@@ -189,7 +192,8 @@ class ItemList():
         return self.split_by_idxs(train_idx, valid_idx)
 
     def _get_by_folder(self, name):
-        return [i for i in range_of(self) if self.items[i].parts[self.num_parts]==name]
+        return [i for i in range_of(self) if (self.items[i].parts[self.num_parts] if isinstance(self.items[i], Path) 
+                else self.items[i].split(os.path.sep)[0]) == name ]
 
     def split_by_folder(self, train:str='train', valid:str='valid')->'ItemLists':
         "Split the data depending on the folder (`train` or `valid`) in which the filenames are."
@@ -275,7 +279,8 @@ class ItemList():
 
     def label_empty(self, **kwargs):
         "Label every item with an `EmptyLabel`."
-        return self.label_from_func(func=lambda o: 0., label_cls=EmptyLabelList)
+        kwargs['label_cls'] = EmptyLabelList
+        return self.label_from_func(func=lambda o: 0., **kwargs)
 
     def label_from_func(self, func:Callable, label_cls:Callable=None, **kwargs)->'LabelList':
         "Apply `func` to every input to get its label."
@@ -283,7 +288,8 @@ class ItemList():
 
     def label_from_folder(self, label_cls:Callable=None, **kwargs)->'LabelList':
         "Give a label to each filename depending on its folder."
-        return self.label_from_func(func=lambda o: o.parts[-2], label_cls=label_cls, **kwargs)
+        return self.label_from_func(func=lambda o: (o.parts if isinstance(o, Path) else o.split(os.path.sep))[-2], 
+                                    label_cls=label_cls, **kwargs)
 
     def label_from_re(self, pat:str, full_path:bool=False, label_cls:Callable=None, **kwargs)->'LabelList':
         "Apply the re in `pat` to determine the label of every filename.  If `full_path`, search in the full name."

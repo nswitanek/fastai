@@ -60,11 +60,13 @@ class RNNLearner(Learner):
         if hasattr(encoder, 'module'): encoder = encoder.module
         torch.save(encoder.state_dict(), self.path/self.model_dir/f'{name}.pth')
 
-    def load_encoder(self, name:str):
+    def load_encoder(self, name:str, device:torch.device=None):
         "Load the encoder `name` from the model directory."
         encoder = get_model(self.model)[0]
+        if device is None: device = self.data.device
         if hasattr(encoder, 'module'): encoder = encoder.module
         encoder.load_state_dict(torch.load(self.path/self.model_dir/f'{name}.pth'))
+        encoder.load_state_dict(torch.load(self.path/self.model_dir/f'{name}.pth', map_location=device))
         self.freeze()
 
     def load_pretrained(self, wgts_fname:str, itos_fname:str, strict:bool=True):
@@ -158,7 +160,7 @@ class LanguageLearner(RNNLearner):
                 xb = nodes[:,-1][:,None]
         if temperature != 1.: scores.div_(temperature)
         node_idx = torch.multinomial(torch.exp(-scores), 1).item()
-        return sep.join(decoder(self.data.vocab.textify([i.item() for i in nodes[node_idx][1:] ], sep=None)))
+        return text + sep + sep.join(decoder(self.data.vocab.textify([i.item() for i in nodes[node_idx][1:] ], sep=None)))
 
     def show_results(self, ds_type=DatasetType.Valid, rows:int=5, max_len:int=20):
         from IPython.display import display, HTML
@@ -231,7 +233,7 @@ class PoolingLinearClassifier(nn.Module):
         raw_outputs,outputs,mask = input
         output = outputs[-1]
         avg_pool = output.masked_fill(mask[:,:,None], 0).mean(dim=1)
-        avg_pool *= output.size(1) / (output.size(1)-mask.float().sum(dim=1))[:,None]
+        avg_pool *= output.size(1) / (output.size(1)-mask.type(avg_pool.dtype).sum(dim=1))[:,None]
         max_pool = output.masked_fill(mask[:,:,None], -float('inf')).max(dim=1)[0]
         x = torch.cat([output[:,-1], max_pool, avg_pool], 1)
         x = self.layers(x)
